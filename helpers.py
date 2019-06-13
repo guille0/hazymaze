@@ -1,5 +1,7 @@
+from numpy_ringbuffer import RingBuffer
 import numpy as np
 import cv2
+import math
 
 
 def crop_from_points(img, corners, make_square=True):
@@ -48,26 +50,26 @@ def crop_from_points(img, corners, make_square=True):
             print(e)
 
     transformation_data = {
-        'matrix': M,
+        'matrix' : M,
         'original_shape': (height, width)
     }
 
     return warped, transformation_data
 
 
-def perspective_transform(img, transformation_matrix, original_shape=(480, 640)):
+def perspective_transform(img, transformation_matrix, original_shape=None):
     warped = img
-    h, w = original_shape
 
     if original_shape is not None:
-        if original_shape[0] > 0 and original_shape[1] > 0:
+        if original_shape[0]>0 and original_shape[1]>0:
             warped = cv2.resize(warped, (original_shape[1], original_shape[0]), interpolation=cv2.INTER_CUBIC)
 
-    white_image = np.zeros((w, h, 3), np.uint8)
+    white_image = np.zeros((640, 480, 3), np.uint8)
 
     white_image[:,:,:] = 255
 
-    warped = cv2.warpPerspective(warped, transformation_matrix, (w, h))
+    # warped = cv2.warpPerspective(warped, transformation_matrix, (640, 480), borderMode=cv2.BORDER_TRANSPARENT)
+    warped = cv2.warpPerspective(warped, transformation_matrix, (640, 480))
 
     return warped
 
@@ -106,10 +108,10 @@ def crop_minAreaRect(src, rect):
     if theta < -45:
         theta += 90
 
-    # Convert to int
+    # Convert to int 
     center, size = tuple(map(int, center)), tuple(map(int, size))
     # Get rotation matrix for rectangle
-    M = cv2.getRotationMatrix2D(center, theta, 1)
+    M = cv2.getRotationMatrix2D( center, theta, 1)
     # Perform rotation on src image
     dst = cv2.warpAffine(src, M, (src.shape[1], src.shape[0]))
     out = cv2.getRectSubPix(dst, size, center)
@@ -127,8 +129,8 @@ def resize_to_square(image, goal_dimension=28, border=2):
     background = np.zeros((goal_dimension, goal_dimension), dtype=np.int)
     resized = cv2.resize(constant, (int(round(width*proportion)), int(round(height*proportion))), interpolation=cv2.INTER_AREA)
     
-    x_offset = (goal_dimension-resized.shape[1])//2
-    y_offset = (goal_dimension-resized.shape[0])//2
+    x_offset=(goal_dimension-resized.shape[1])//2
+    y_offset=(goal_dimension-resized.shape[0])//2
 
     background[y_offset:y_offset+resized.shape[0], x_offset:x_offset+resized.shape[1]] = resized
 
