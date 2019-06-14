@@ -8,9 +8,10 @@ from game import Master
 
 from datetime import datetime
 
+
 # MAIN
 def maze_boi(img_original, key):
-    first = datetime.now()
+    # first = datetime.now()
     game = Master.instance()
 
     # Tries to find the part of the image with the maze
@@ -28,12 +29,8 @@ def maze_boi(img_original, key):
 
             # We inverse the matrix so we can do the opposite transformation later
             transformation_matrix = np.linalg.pinv(transformation_matrix)
-        
-            items, item_mask = find_items(img_cropped_maze)
 
-            # img_copy_croppy = img_cropped_maze.copy()
-            # img_copy_croppy[item_mask > 0] = (255, 255, 0)
-            # cv2.imshow('ad', img_copy_croppy)
+            items, item_mask = find_items(img_cropped_maze)
 
             vlines, hlines = find_lines(img_cropped_maze, item_mask)
 
@@ -50,11 +47,11 @@ def maze_boi(img_original, key):
                     # Turn the maze into an array we can work with
                     maze.build_maze(items, key=key)
 
-                    img_cropped_maze[item_mask > 0] = (180, 255, 0)
+                    # img_cropped_maze[item_mask > 0] = (180, 255, 0)
                     maze.draw_items(img_cropped_maze)
 
                     if maze.is_valid() is True:
-                        
+
                         if game.pause is True:
                             # When it finds it, it just returns to it
                             if np.array2string(maze.maze_array) == np.array2string(game.maze.maze_array):
@@ -85,7 +82,7 @@ def maze_boi(img_original, key):
 
         elif corners is None:
             # If no object was found we have to look for the same maze again
-            # When we got it, it will unpause. 
+            # When we got it, it will unpause.
             game.pause = True
 
     # Exit button (unloads the maze)
@@ -96,22 +93,24 @@ def maze_boi(img_original, key):
 
     if corners is not None:
         # We paste the cropped maze which is now solved into the camera image
-        # TODO: Test texts:
-        if game.pause is True:
-            write_text(img_original, 'Paused')
-        if game.playing is True:
-            write_text(img_original, 'Playing')
-        if game.ready is True:
-            write_text(img_original, 'Press space to begin!')
-            game.ready = False
+        # TODO HIDE?: Test texts:
+        # if game.pause is True:
+        #     write_text(img_original, 'Paused')
+        # if game.playing is True:
+        #     write_text(img_original, 'Playing')
+        # if game.ready is True:
+        #     write_text(img_original, 'Press space to begin!')
+        #     game.ready = False
 
-        img_maze_final = perspective_transform(img_cropped_maze, transformation_matrix, original_shape)
+        img_maze_final = perspective_transform(img_cropped_maze, transformation_matrix,
+                                               original_shape, img_original.shape)
         img_final = blend_non_transparent(img_original, img_maze_final)
 
     else:
         # If we found no maze, return same image
         img_final = img_original
 
+    # print(f'time-taken: {datetime.now()-first}')
     return img_final
 
 

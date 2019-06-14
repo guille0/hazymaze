@@ -50,8 +50,10 @@ class Master:
         # Activate actions for each unit. Can change fps in __init__
         time = self.refresh_time()
 
-        # Do actions for each unit, unless it's all over
+        # Do actions for each unit
+        # print('frame')
         if time is True:
+            # print('step')
             if self.player.action != 'cheering':
                 self.player.step(min_dimension)
                 for npc in self.enemies + self.dogs:
@@ -66,41 +68,6 @@ class Master:
         for dog in self.dogs + self.cheering_dogs:
             dog.draw(img_cropped_maze, sprite_height=int(round(min_dimension*1.5)))
         self.player.draw(img_cropped_maze, sprite_height=int(round(min_dimension*2)))
-
-        shortest_path = ([], np.inf)
-
-        # If our guy isn't doing anything, get him going
-        if not self.player.path and self.player.action not in ['cheering', 'fighting']:
-            # 1st priority is dogs, 2nd is leaving the maze
-            if self.dogs:
-                for dog in self.dogs:
-                    # Since dogs don't move, we go for their spawn Case
-                    path, distance = self.player.make_path(dog.spawn)
-                    if distance < shortest_path[1]:
-                        shortest_path = (path, distance)
-                # If there is a path, get our guy on the way
-                if shortest_path[1] != np.inf:
-                    self.player.set_path(shortest_path)
-
-            # If there AREN'T dogs left or if we could not find a path to them, we leave
-            if not self.dogs or not self.player.path:
-                self.player.finished = True
-                shortest_path = ([], np.inf)
-
-                for entrance_coords in self.maze.entrances:
-                    if entrance_coords not in self.ignored_entrances:
-                        # Find shortest path to exit (exluding the one we came from, which we popped)
-                        goal = self.maze.case_array[entrance_coords]
-                        path, distance = self.player.make_path(goal)
-                        # Keep the shortest path to a dougie
-                        if distance < shortest_path[1]:
-                            shortest_path = (path, distance)
-                # If we found is a path, follow it
-                if shortest_path[1] != np.inf:
-                    self.player.set_path(shortest_path)
-                else:
-                    # This should never happen unless you edit with the maze in the middle of it
-                    print('error exit not found?')
 
     def start(self):
         'Only do this one, time, when starting a new maze for the first time'
@@ -180,7 +147,7 @@ class Unit:
         self.last_frame = 3
         self.current_frame = 0
         # Animation speed (1 = one image per frame)
-        self.image_speed = 0.5
+        self.image_speed = 0.8
         # 0 = right, 1 = up, 2 = left, 3 = down
         self.direction = 3
 
@@ -331,17 +298,13 @@ class Player(Mover):
         self.show_hp_timer = 0
         # NOTE: Change this for speed
         self.move_speed = 0.25
+        self.image_speed = self.move_speed*2
 
     def change_hp(self, *args, **kwargs):
         super().change_hp(*args, **kwargs)
         self.show_hp_timer = self.show_hp_max_timer
 
-    def class_step(self, min_dimension=None):
-        # Timer for showing hearts on top of his lil head
-        if self.show_hp_timer > 0:
-            self.show_hp_timer -= 1
-
-        # Dog collision
+    def action_dog_collision(self):
         dog_collision = self.static_collision(self.game.dogs)
         if dog_collision is not None:
             self.change_hp(50)
@@ -362,6 +325,49 @@ class Player(Mover):
 
             self.path = None
             self.moving_to = None
+
+    def action_find_path(self):
+        # If our guy isn't doing anything, get him going
+        if not self.path and self.action not in ['cheering', 'fighting']:
+            shortest_path = ([], np.inf)
+            # 1st priority is dogs, 2nd is leaving the maze
+            if self.game.dogs:
+                for dog in self.game.dogs:
+                    # Since dogs don't move, we go for their spawn Case
+                    path, distance = self.make_path(dog.spawn)
+                    if distance < shortest_path[1]:
+                        shortest_path = (path, distance)
+                # If there is a path, get our guy on the way
+                if shortest_path[1] != np.inf:
+                    self.set_path(shortest_path)
+
+            # If there AREN'T dogs left or if we could not find a path to them, we leave
+            if not self.game.dogs or not self.path:
+                self.finished = True
+                shortest_path = ([], np.inf)
+
+                for entrance_coords in self.game.maze.entrances:
+                    if entrance_coords not in self.game.ignored_entrances:
+                        # Find shortest path to exit (exluding the one we came from, which we popped)
+                        goal = self.game.maze.case_array[entrance_coords]
+                        path, distance = self.make_path(goal)
+                        # Keep the shortest path to a dougie
+                        if distance < shortest_path[1]:
+                            shortest_path = (path, distance)
+                # If we found is a path, follow it
+                if shortest_path[1] != np.inf:
+                    self.set_path(shortest_path)
+                else:
+                    # This should never happen unless you edit with the maze in the middle of it
+                    print('error exit not found?')
+
+    def class_step(self, min_dimension=None):
+        # Timer for showing hearts on top of his lil head
+        if self.show_hp_timer > 0:
+            self.show_hp_timer -= 1
+
+        self.action_dog_collision()
+        self.action_find_path()
 
         # If we are at the exit (and we have rescued all rescuable dogs), its over
         if self.finished is True:
@@ -401,9 +407,9 @@ class Player(Mover):
         threshold = self.max_hp//(self.hearts_shown*2)
 
         fullheart, halfheart, emptyheart = sprite[:,:,:,0], sprite[:,:,:,1], sprite[:,:,:,2],
-        fullheart = resize_transparent_sprite(fullheart, height=sprite_height//2)
-        halfheart = resize_transparent_sprite(halfheart, height=sprite_height//2)
-        emptyheart = resize_transparent_sprite(emptyheart, height=sprite_height//2)
+        fullheart = resize_transparent_sprite(fullheart, height=sprite_height//3)
+        halfheart = resize_transparent_sprite(halfheart, height=sprite_height//3)
+        emptyheart = resize_transparent_sprite(emptyheart, height=sprite_height//3)
         left_heart_x = x-(fullheart.shape[1]*self.hearts_shown//2)
         if self.direction == 1 and self.action == 'fighting':
             draw_y = int(round(bottom_y+fullheart.shape[0]/1.5))
@@ -453,9 +459,10 @@ class Enemy(Mover):
         # NOTE: Change for hp/damage
         self.max_hp = 50
         self.hp = self.max_hp
-        self.attack_power = 2.5
+        self.attack_power = 3.5
         # NOTE: Change this for speed
         self.move_speed = 0.2
+        self.image_speed = self.move_speed*2
 
     def set_patrol(self):
         patrol_cases = [self.spawn]
@@ -576,6 +583,7 @@ class Item(Mover):
         self.cheer_timer = self.max_cheer_timer
         # NOTE: Change for doggy speed
         self.move_speed = 0.4
+        self.image_speed = self.move_speed*2
 
     def class_step(self, min_dimension):
         if self.game.maze.case_array[self.array_y, self.array_x].entrance is True:

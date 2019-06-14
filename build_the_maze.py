@@ -5,8 +5,6 @@ import pickle
 from maze_solver import astar
 from game import Master
 
-from datetime import datetime
-
 
 class Maze:
     def __init__(self, vlines, hlines):
@@ -62,12 +60,11 @@ class Maze:
             else:
                 realx = self.xgrid[x//2]
 
-        except IndexError as e:
+        except IndexError:
             # print(f'real_position out of range: {y, x}')
             return None, None
-        
-        return realy, realx
 
+        return realy, realx
 
     def get_walkable_grid(self):
         # Lists of x and y positions for the grid
@@ -79,7 +76,6 @@ class Maze:
         for hline, nexthline in zip(self.hlines, self.hlines[1:]):
             y = int(round((hline.position+nexthline.position)/2))
             self.ygrid.append(y)
-
 
     def get_entrances_and_items(self):
         # Get from self.case_array
@@ -95,7 +91,6 @@ class Maze:
                     if case.value == 7:
                         self.items.append(((y, x), 'big'))
 
-
     def build_items(self, items):
         for [[x, y]], kind in items:
             if x > self.vlines[0].position and x < self.vlines[-1].position:
@@ -107,12 +102,11 @@ class Maze:
                     x = x*2+1
 
                     if y < self.maze_array.shape[0] and x < self.maze_array.shape[1]:
-                        # self.items.append(((y,x), kind))
+                        self.items.append(((y,x), kind))
                         if kind == 'smol':
                             self.maze_array[y,x] = 9
                         else:
                             self.maze_array[y,x] = 7
-
 
     def build_maze(self, items, key=None):
         game = Master.instance()
@@ -134,13 +128,12 @@ class Maze:
                 print(len(game.built_mazes.keys()))
 
         if binary_maze_string in game.built_mazes.keys():
-            self.case_array = game.built_mazes[binary_maze_string]
+            self.case_array, self.entrances, self.items = game.built_mazes[binary_maze_string]
         else:
             self.compress_maze(items)
-            game.built_mazes[binary_maze_string] = self.case_array
-        
-        self.get_entrances_and_items()
+            game.built_mazes[binary_maze_string] = (self.case_array, self.entrances, self.items)
 
+        # self.get_entrances_and_items()
 
     def build_basic_maze(self):
         height = len(self.ygrid)+len(self.hlines)
@@ -173,13 +166,12 @@ class Maze:
         for i, y in zip(range(1,height,2), self.ygrid):
             if self.vlines[0].array[y] == 0:
                 maze_array[i, 0] = 0
-        
+
         self.maze_array = maze_array
         # np.set_printoptions(threshold=np.inf)
         # print(maze_array)
 
         return maze_array
-
 
     def compress_maze(self, items):
         # Turn all the 0s into Case objects and add their paths
@@ -205,7 +197,6 @@ class Maze:
                     entrances.append((y,w))
             return entrances
 
-
         def nearby_squares(y, x):
             paths = []
             corridor = False
@@ -225,17 +216,17 @@ class Maze:
                     paths.append((y, x-1))
             if x < w:
                 if self.maze_array[y, x+1] != 1:
-                    hors +=1
+                    hors += 1
                     paths.append((y, x+1))
 
             if (hors == 2 and verts == 0) or (verts == 2 and hors == 0):
                 corridor = True
-            
-            return paths, corridor
-                
 
-        entrances = get_entrances()
-        if not entrances:
+            return paths, corridor
+
+        self.entrances = get_entrances()
+
+        if not self.entrances:
             return None
 
         non_Cs = []
@@ -253,8 +244,8 @@ class Maze:
                         non_Cs.append(self.case_array[y,x])
                         # Get its nearby squares
                     [self.case_array[y,x].add_nearby_square(nearby) for nearby in nearbys]
-        
-        for entrance in entrances:
+
+        for entrance in self.entrances:
             self.case_array[entrance].entrance = True
 
         # We got an array where walkable places are Case objects
@@ -278,7 +269,7 @@ class Maze:
                 # nearby is the (y, x) of the next square we wanna go to
                 prevcase = currentcase
                 currentcase = self.case_array[nearby]
-                
+
             return currentcase, distance
 
         # So now we craate paths between all the non-Cs and check their distances
@@ -290,21 +281,11 @@ class Maze:
 
         self.non_Cs = non_Cs
 
-        # np.set_printoptions(threshold=np.inf)
-        # print(self.case_array)
-
     # For testing
     def pickle(self):
         with open('pickled_maze', 'wb') as f:
             pickle.dump(self, f)
 
-
-    def get_path(self, start, end):
-        'only call after build_maze'
-
-        pass
-
-    # Testing
     def test_path(self):
         start = self.case_array[self.entrances[0]]
         end = self.case_array[self.entrances[1]]
@@ -315,14 +296,12 @@ class Maze:
             return []
         return path
 
-
     def clear(self):
         'Resets variables used for astar algorithm'
         for y, row in enumerate(self.case_array):
             for x, case in enumerate(row):
                 if isinstance(case, Case):
                     case.clear()
-
 
     def draw_path(self, path, image):
         for prevcase, case in zip(path, path[1:]):
@@ -333,13 +312,11 @@ class Maze:
             else:
                 print('path not found (draw path)')
 
-
     def draw_grid(self, image):
         for x in self.xgrid:
             cv2.line(image, (x, 0), (x, 400), (255,0,0), 1)
         for y in self.ygrid:
             cv2.line(image, (0, y), (400, y), (0,255,0), 1)
-
 
     def draw_maze(self, image):
         'requires live feed'
@@ -347,7 +324,6 @@ class Maze:
             vline.draw_line(image)
         for hline in self.hlines:
             hline.draw_line(image)
-
 
     def draw_items(self, image):
         for item in self.items:
@@ -372,10 +348,10 @@ class Line:
         mask = np.zeros(shape=(image.shape[0], image.shape[1]))
         if self.kind == 'v':
             mask[:, self.position] = self.array
-            image[mask==True] = (0, 0, 255)
+            image[mask == True] = (0, 0, 255)
         if self.kind == 'h':
             mask[self.position, :] = self.array
-            image[mask==True] = (0, 0, 255)
+            image[mask == True] = (0, 0, 255)
 
 
 class Case:
@@ -401,20 +377,16 @@ class Case:
             return '='
         else:
             return '1'
-    
 
     def __lt__(self, other):
         return True
-
 
     def clear(self):
         self.distance = np.inf
         self.back = None
 
-
     def add_path(self, case, distance):
         self.paths.append((case, distance))
-    
+
     def add_nearby_square(self, pos):
         self.nearby_squares.append(pos)
-

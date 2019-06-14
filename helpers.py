@@ -1,17 +1,10 @@
-from numpy_ringbuffer import RingBuffer
 import numpy as np
 import cv2
-import math
 
 
 def crop_from_points(img, corners, make_square=True):
 
-    cnt = np.array([
-        corners[0],
-        corners[1],
-        corners[2],
-        corners[3]
-        ])
+    cnt = np.array([corners[0], corners[1], corners[2], corners[3]])
 
     rect = cv2.minAreaRect(cnt)
     center, size, theta = rect
@@ -19,7 +12,7 @@ def crop_from_points(img, corners, make_square=True):
     # Angle correction
     if theta < -45:
         theta += 90
-    
+
     rect = (center, size, theta)
 
     box = cv2.boxPoints(rect)
@@ -50,53 +43,45 @@ def crop_from_points(img, corners, make_square=True):
             print(e)
 
     transformation_data = {
-        'matrix' : M,
+        'matrix': M,
         'original_shape': (height, width)
     }
 
     return warped, transformation_data
 
 
-def perspective_transform(img, transformation_matrix, original_shape=None):
+def perspective_transform(img, transformation_matrix, original_shape=None, full_image_shape=(480,640)):
     warped = img
 
-    if original_shape is not None:
-        if original_shape[0]>0 and original_shape[1]>0:
-            warped = cv2.resize(warped, (original_shape[1], original_shape[0]), interpolation=cv2.INTER_CUBIC)
+    h, w = full_image_shape[0], full_image_shape[1]
 
-    white_image = np.zeros((640, 480, 3), np.uint8)
+    if original_shape is not None:
+        if original_shape[0] > 0 and original_shape[1] > 0:
+            warped = cv2.resize(warped, (original_shape[1], original_shape[0]), interpolation=cv2.INTER_CUBIC)
+    white_image = np.zeros((w, h, 3), np.uint8)
 
     white_image[:,:,:] = 255
 
-    # warped = cv2.warpPerspective(warped, transformation_matrix, (640, 480), borderMode=cv2.BORDER_TRANSPARENT)
-    warped = cv2.warpPerspective(warped, transformation_matrix, (640, 480))
+    warped = cv2.warpPerspective(warped, transformation_matrix, (w, h))
 
     return warped
 
 
 def blend_non_transparent(face_img, overlay_img):
-    # Let's find a mask covering all the non-black (foreground) pixels
-    # NB: We need to do this on grayscale version of the image
     gray_overlay = cv2.cvtColor(overlay_img, cv2.COLOR_BGR2GRAY)
     overlay_mask = cv2.threshold(gray_overlay, 1, 255, cv2.THRESH_BINARY)[1]
 
-    # Let's shrink and blur it a little to make the transitions smoother...
     overlay_mask = cv2.erode(overlay_mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
     overlay_mask = cv2.blur(overlay_mask, (3, 3))
 
-    # And the inverse mask, that covers all the black (background) pixels
     background_mask = 255 - overlay_mask
 
-    # Turn the masks into three channel, so we can use them as weights
     overlay_mask = cv2.cvtColor(overlay_mask, cv2.COLOR_GRAY2BGR)
     background_mask = cv2.cvtColor(background_mask, cv2.COLOR_GRAY2BGR)
 
-    # Create a masked out face image, and masked out overlay
-    # We convert the images to floating point in range 0.0 - 1.0
     face_part = (face_img * (1 / 255.0)) * (background_mask * (1 / 255.0))
     overlay_part = (overlay_img * (1 / 255.0)) * (overlay_mask * (1 / 255.0))
 
-    # And finally just add them together, and rescale it back to an 8bit integer image
     return np.uint8(cv2.addWeighted(face_part, 255.0, overlay_part, 255.0, 0.0))
 
 
@@ -108,10 +93,9 @@ def crop_minAreaRect(src, rect):
     if theta < -45:
         theta += 90
 
-    # Convert to int 
     center, size = tuple(map(int, center)), tuple(map(int, size))
     # Get rotation matrix for rectangle
-    M = cv2.getRotationMatrix2D( center, theta, 1)
+    M = cv2.getRotationMatrix2D(center, theta, 1)
     # Perform rotation on src image
     dst = cv2.warpAffine(src, M, (src.shape[1], src.shape[0]))
     out = cv2.getRectSubPix(dst, size, center)
@@ -127,10 +111,11 @@ def resize_to_square(image, goal_dimension=28, border=2):
     BLACK = [0, 0, 0]
     constant = cv2.copyMakeBorder(image, border, border, border, border, cv2.BORDER_CONSTANT, value=BLACK)
     background = np.zeros((goal_dimension, goal_dimension), dtype=np.int)
-    resized = cv2.resize(constant, (int(round(width*proportion)), int(round(height*proportion))), interpolation=cv2.INTER_AREA)
-    
-    x_offset=(goal_dimension-resized.shape[1])//2
-    y_offset=(goal_dimension-resized.shape[0])//2
+    resized = cv2.resize(constant, (int(round(width*proportion)), int(round(height*proportion))),
+                         interpolation=cv2.INTER_AREA)
+
+    x_offset = (goal_dimension-resized.shape[1])//2
+    y_offset = (goal_dimension-resized.shape[0])//2
 
     background[y_offset:y_offset+resized.shape[0], x_offset:x_offset+resized.shape[1]] = resized
 
@@ -160,9 +145,9 @@ def overlay_transparent(background, overlay, y, x):
         overlay = np.concatenate(
             [
                 overlay,
-                np.ones((overlay.shape[0], overlay.shape[1], 1), dtype = overlay.dtype) * 255
+                np.ones((overlay.shape[0], overlay.shape[1], 1), dtype=overlay.dtype) * 255
             ],
-            axis = 2,
+            axis=2,
         )
 
     overlay_image = overlay[..., :3]
@@ -173,7 +158,7 @@ def overlay_transparent(background, overlay, y, x):
     return background
 
 
-def resize_transparent_sprite(image, width = None, height = None, inter = cv2.INTER_AREA):
+def resize_transparent_sprite(image, width=None, height=None, inter=cv2.INTER_AREA):
     # split image and alpha channel
     # resize them separately
     # join them
@@ -203,8 +188,8 @@ def resize_transparent_sprite(image, width = None, height = None, inter = cv2.IN
         dim = (width, int(h * r))
 
     # resize the image
-    image_resized = cv2.resize(other_channels, dim, interpolation = inter)
-    alpha_resized = cv2.resize(alpha_channel, dim, interpolation = inter)
+    image_resized = cv2.resize(other_channels, dim, interpolation=inter)
+    alpha_resized = cv2.resize(alpha_channel, dim, interpolation=inter)
     new_image = np.empty((dim[1], dim[0], 4))
     new_image[:, :, :3] = image_resized
     new_image[:, :, 3] = alpha_resized

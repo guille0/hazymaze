@@ -3,7 +3,6 @@ import cv2
 
 from build_the_maze import Line
 
-from datetime import datetime
 
 def find_maze(img):
     '''Finds the biggest object in the image and returns its 4 corners (to crop it)'''
@@ -16,14 +15,7 @@ def find_maze(img):
     # Get contours:
     contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
-    # TEST SHOW
-    # edgy = img.copy()
-    # cv2.drawContours(edgy, contours,-1, (255,0,0), 2)
-    # cv2.imshow('e', edgy)
     # Extracting the image of what we think might be a maze:
-    topbottom_edges = (0, img.shape[0]-1)
-    leftright_edges = (0, img.shape[1]-1)
-
     if contours:
 
         conts = sorted(contours, key=cv2.contourArea, reverse=True)
@@ -88,7 +80,7 @@ def find_items(maze_image):
                 d[0][0], d[0][1] = int(round(d[0][0])), int(round(d[0][1]))
 
                 # TODO adjust the size here?
-                if cv2.contourArea(cnt) < 0.1*h:
+                if cv2.contourArea(cnt) < 0.125*h:
                     items.append((d, 'smol'))
                     cv2.drawContours(item_mask, [cnt], -1, (255,255,255), -1)
                 else:
