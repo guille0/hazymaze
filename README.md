@@ -1,4 +1,4 @@
-# hazymazy
+# hazymaze
 
 ### v 0.1
 
