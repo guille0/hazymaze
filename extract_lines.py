@@ -12,6 +12,8 @@ def find_maze(img):
     edges = cv2.GaussianBlur(edges, (11, 11), 0)
     edges = cv2.adaptiveThreshold(edges, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 19, 2)
 
+    cv2.imshow('adad', edges)
+
     # Get contours:
     contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
 
@@ -54,6 +56,7 @@ def find_maze(img):
 def find_items(maze_image):
     # Preprocessing to find the contour of the shapes
     h, w = maze_image.shape[0], maze_image.shape[1]
+    dim = (h+w)//2
     b_and_w = cv2.cvtColor(maze_image, cv2.COLOR_BGR2GRAY)
     edges = cv2.GaussianBlur(b_and_w, (11, 11), 0)
     edges = cv2.adaptiveThreshold(edges, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
@@ -72,15 +75,15 @@ def find_items(maze_image):
 
         for cnt in conts:
 
-            if cv2.contourArea(cnt) > 0.25*h:
+            if cv2.contourArea(cnt) > 0.35*dim:
                 return items, item_mask
 
-            if cv2.contourArea(cnt) > 0.05*h and cv2.contourArea(cnt) <= 0.25*h:
+            elif cv2.contourArea(cnt) > 0.05*dim:
                 d = np.mean(cnt, axis=0)
                 d[0][0], d[0][1] = int(round(d[0][0])), int(round(d[0][1]))
 
                 # TODO adjust the size here?
-                if cv2.contourArea(cnt) < 0.125*h:
+                if cv2.contourArea(cnt) < 0.1*dim:
                     items.append((d, 'smol'))
                     cv2.drawContours(item_mask, [cnt], -1, (255,255,255), -1)
                 else:
@@ -126,7 +129,10 @@ def find_lines(maze_image, item_mask=None):
             maze_lines = []
             prevx = lines[0][0][0]
             exes = []
-            array = np.zeros((h), dtype=np.bool)
+            if direction == 'v':
+                array = np.zeros((h), dtype=np.bool)
+            else:
+                array = np.zeros((flipped_edges.shape[0]), dtype=np.bool)
 
             for line in lines:
                 x, y1, x2, y2 = line[0]
@@ -136,7 +142,10 @@ def find_lines(maze_image, item_mask=None):
                 else:
                     maze_lines.append(Line(array, int(round(np.mean(exes))), direction))
                     # Reset line
-                    array = np.zeros((h), dtype=np.bool)
+                    if direction == 'v':
+                        array = np.zeros((h), dtype=np.bool)
+                    else:
+                        array = np.zeros((flipped_edges.shape[0]), dtype=np.bool)
                     exes = []
                     # Add to it
                     array[y2:y1] = True

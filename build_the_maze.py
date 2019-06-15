@@ -77,20 +77,6 @@ class Maze:
             y = int(round((hline.position+nexthline.position)/2))
             self.ygrid.append(y)
 
-    def get_entrances_and_items(self):
-        # Get from self.case_array
-        self.entrances = []
-        self.items = []
-        for y, row in enumerate(self.case_array):
-            for x, case in enumerate(row):
-                if isinstance(case, Case):
-                    if case.entrance is True:
-                        self.entrances.append((y, x))
-                    if case.value == 9:
-                        self.items.append(((y, x), 'smol'))
-                    if case.value == 7:
-                        self.items.append(((y, x), 'big'))
-
     def build_items(self, items):
         for [[x, y]], kind in items:
             if x > self.vlines[0].position and x < self.vlines[-1].position:
@@ -120,12 +106,6 @@ class Maze:
         # So if we are trying to build the same maze, we don't have to recreate it
         np.set_printoptions(threshold=np.inf)
         binary_maze_string = np.array2string(self.maze_array)
-        if key is not None:
-            if key == ord('q'):
-                print(items)
-                np.set_printoptions(threshold=np.inf)
-                print(binary_maze_string)
-                print(len(game.built_mazes.keys()))
 
         if binary_maze_string in game.built_mazes.keys():
             self.case_array, self.entrances, self.items = game.built_mazes[binary_maze_string]
@@ -133,12 +113,17 @@ class Maze:
             self.compress_maze(items)
             game.built_mazes[binary_maze_string] = (self.case_array, self.entrances, self.items)
 
-        # self.get_entrances_and_items()
+        if key is not None:
+            if key == ord('q'):
+                print(binary_maze_string)
+                for e in self.entrances:
+                    print(self.real_position(e[0], e[1]))
+                print(self.entrances)
+                print(self.items)
 
     def build_basic_maze(self):
         height = len(self.ygrid)+len(self.hlines)
         width = len(self.xgrid)+len(self.vlines)
-        # print(self.hlines)
         maze_array = np.zeros((height, width), dtype=np.uint8)
 
         # print(len(self.hlines))
@@ -150,22 +135,17 @@ class Maze:
             if i % 2 == 0:
                 maze_array[:, i] = 1
 
-        # Check for holes in walls (does not check top and left walls)
-        for i, y, downwall in zip(range(1,width,2), self.xgrid, self.hlines[1:]):
-            for j, x, rightwall in zip(range(1,height,2), self.ygrid, self.vlines[1:]):
-                # IF at our Y there is a 1 in rightwall.array, then we cannot go right
-                if rightwall.array[y] == 0:
-                    maze_array[i, j+1] = 0
-                if downwall.array[x] == 0:
-                    maze_array[i+1, j] = 0
-
-        # This checks top and left walls
-        for j, x in zip(range(1,height,2), self.xgrid):
-            if self.hlines[0].array[x] == 0:
-                maze_array[0, j] = 0
-        for i, y in zip(range(1,height,2), self.ygrid):
-            if self.vlines[0].array[y] == 0:
-                maze_array[i, 0] = 0
+        # for each xgrid, check all the vlines
+        # for each ygrif, check all the hlines
+        for i, x in enumerate(self.xgrid):
+            for j, hline in enumerate(self.hlines):
+                if hline.array[x] == 0:
+                    maze_array[j*2,i*2+1] = 0
+        for i, y in enumerate(self.ygrid):
+            for j, vline in enumerate(self.vlines):
+                # print(vline.array[y])
+                if vline.array[y] == 0:
+                    maze_array[i*2+1,j*2] = 0
 
         self.maze_array = maze_array
         # np.set_printoptions(threshold=np.inf)
@@ -369,6 +349,8 @@ class Case:
 
     def __repr__(self):
         # return str(self.position)
+        if not self.paths:
+            return '?'
         if self.value > 1:
             return 'H'
         if self.entrance:

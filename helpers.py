@@ -2,7 +2,7 @@ import numpy as np
 import cv2
 
 
-def crop_from_points(img, corners, make_square=True):
+def crop_from_points(img, corners, make_square=False):
 
     cnt = np.array([corners[0], corners[1], corners[2], corners[3]])
 
@@ -12,35 +12,27 @@ def crop_from_points(img, corners, make_square=True):
     # Angle correction
     if theta < -45:
         theta += 90
+        cnt = np.array([corners[1], corners[3], corners[0], corners[2]])
 
-    rect = (center, size, theta)
+        rect = (center, size, theta)
+        box = cv2.boxPoints(rect)
+        box = np.int0(box)
 
-    box = cv2.boxPoints(rect)
-    box = np.int0(box)
+        height = int(rect[1][0])
+        width = int(rect[1][1])
+    else:
+        rect = (center, size, theta)
+        box = cv2.boxPoints(rect)
+        box = np.int0(box)
 
-    # cv2.drawContours(img, [box], 0, (0, 0, 255), 2)
-
-    # get width and height of the detected rectangle
-    width = int(rect[1][0])
-    height = int(rect[1][1])
+        height = int(rect[1][1])
+        width = int(rect[1][0])
 
     src_pts = np.float32([corners[0],corners[1],corners[2],corners[3]])
     dst_pts = np.float32([[0,0],[width,0],[0,height],[width,height]])
 
-    # the perspective transformation matrix
     M = cv2.getPerspectiveTransform(src_pts, dst_pts)
-
-    # directly warp the rotated rectangle to get the straightened rectangle
     warped = cv2.warpPerspective(img, M, (width, height))
-
-    # Making it square so the numbers are more readable:
-
-    if make_square is True:
-        try:
-            warped = cv2.resize(warped, (max(width, height), max(width, height)), interpolation=cv2.INTER_CUBIC)
-
-        except Exception as e:
-            print(e)
 
     transformation_data = {
         'matrix': M,
@@ -51,24 +43,16 @@ def crop_from_points(img, corners, make_square=True):
 
 
 def perspective_transform(img, transformation_matrix, original_shape=None, full_image_shape=(480,640)):
-    warped = img
 
     h, w = full_image_shape[0], full_image_shape[1]
 
-    if original_shape is not None:
-        if original_shape[0] > 0 and original_shape[1] > 0:
-            warped = cv2.resize(warped, (original_shape[1], original_shape[0]), interpolation=cv2.INTER_CUBIC)
-    white_image = np.zeros((w, h, 3), np.uint8)
-
-    white_image[:,:,:] = 255
-
-    warped = cv2.warpPerspective(warped, transformation_matrix, (w, h))
+    warped = cv2.warpPerspective(img, transformation_matrix, (w, h))
 
     return warped
 
 
-def blend_non_transparent(face_img, overlay_img):
-    gray_overlay = cv2.cvtColor(overlay_img, cv2.COLOR_BGR2GRAY)
+def blend_non_transparent(sprite, background_img):
+    gray_overlay = cv2.cvtColor(background_img, cv2.COLOR_BGR2GRAY)
     overlay_mask = cv2.threshold(gray_overlay, 1, 255, cv2.THRESH_BINARY)[1]
 
     overlay_mask = cv2.erode(overlay_mask, cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3)))
@@ -79,51 +63,15 @@ def blend_non_transparent(face_img, overlay_img):
     overlay_mask = cv2.cvtColor(overlay_mask, cv2.COLOR_GRAY2BGR)
     background_mask = cv2.cvtColor(background_mask, cv2.COLOR_GRAY2BGR)
 
-    face_part = (face_img * (1 / 255.0)) * (background_mask * (1 / 255.0))
-    overlay_part = (overlay_img * (1 / 255.0)) * (overlay_mask * (1 / 255.0))
+    sprite_part = (sprite * (1 / 255.0)) * (background_mask * (1 / 255.0))
+    overlay_part = (background_img * (1 / 255.0)) * (overlay_mask * (1 / 255.0))
 
-    return np.uint8(cv2.addWeighted(face_part, 255.0, overlay_part, 255.0, 0.0))
-
-
-def crop_minAreaRect(src, rect):
-    # Get center, size, and angle from rect
-    center, size, theta = rect
-
-    # Angle correction
-    if theta < -45:
-        theta += 90
-
-    center, size = tuple(map(int, center)), tuple(map(int, size))
-    # Get rotation matrix for rectangle
-    M = cv2.getRotationMatrix2D(center, theta, 1)
-    # Perform rotation on src image
-    dst = cv2.warpAffine(src, M, (src.shape[1], src.shape[0]))
-    out = cv2.getRectSubPix(dst, size, center)
-    return out
-
-
-def resize_to_square(image, goal_dimension=28, border=2):
-    height, width = image.shape[0], image.shape[1]
-    smol = max(height, width)
-
-    proportion = goal_dimension/smol
-
-    BLACK = [0, 0, 0]
-    constant = cv2.copyMakeBorder(image, border, border, border, border, cv2.BORDER_CONSTANT, value=BLACK)
-    background = np.zeros((goal_dimension, goal_dimension), dtype=np.int)
-    resized = cv2.resize(constant, (int(round(width*proportion)), int(round(height*proportion))),
-                         interpolation=cv2.INTER_AREA)
-
-    x_offset = (goal_dimension-resized.shape[1])//2
-    y_offset = (goal_dimension-resized.shape[0])//2
-
-    background[y_offset:y_offset+resized.shape[0], x_offset:x_offset+resized.shape[1]] = resized
-
-    final = background
-    return np.uint8(final)
+    return np.uint8(cv2.addWeighted(sprite_part, 255.0, overlay_part, 255.0, 0.0))
 
 
 def overlay_transparent(background, overlay, y, x):
+    if y < 0:
+        y = 0
 
     background_width = background.shape[1]
     background_height = background.shape[0]
@@ -187,14 +135,12 @@ def resize_transparent_sprite(image, width=None, height=None, inter=cv2.INTER_AR
         r = width / float(w)
         dim = (width, int(h * r))
 
-    # resize the image
     image_resized = cv2.resize(other_channels, dim, interpolation=inter)
     alpha_resized = cv2.resize(alpha_channel, dim, interpolation=inter)
     new_image = np.empty((dim[1], dim[0], 4))
     new_image[:, :, :3] = image_resized
     new_image[:, :, 3] = alpha_resized
 
-    # return the resized image
     return new_image
 
 

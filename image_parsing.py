@@ -11,7 +11,7 @@ from datetime import datetime
 
 # MAIN
 def maze_boi(img_original, key):
-    # first = datetime.now()
+    first = datetime.now()
     game = Master.instance()
 
     # Tries to find the part of the image with the maze
@@ -23,6 +23,7 @@ def maze_boi(img_original, key):
         if corners is not None:
             # We crop out the maze and get the info needed to paste it back (matrix)
             img_cropped_maze, transformation = crop_from_points(img_original, corners)
+            cv2.imshow('asdasdasdasd', img_cropped_maze)
             # with img_cropped_maze get the red bits and extract them (mask)
             transformation_matrix = transformation['matrix']
             original_shape = transformation['original_shape']
@@ -46,7 +47,6 @@ def maze_boi(img_original, key):
 
                     # Turn the maze into an array we can work with
                     maze.build_maze(items, key=key)
-
                     # img_cropped_maze[item_mask > 0] = (180, 255, 0)
                     maze.draw_items(img_cropped_maze)
 
@@ -72,12 +72,13 @@ def maze_boi(img_original, key):
             transformation_matrix = transformation['matrix']
             original_shape = transformation['original_shape']
             transformation_matrix = np.linalg.pinv(transformation_matrix)
-
+            # first = datetime.now()
             maze = game.maze
             h, w = img_cropped_maze.shape[0], img_cropped_maze.shape[1]
             game.adjust_lines(h, w)
             # maze.draw_grid(img_cropped_maze)
             game.step(img_cropped_maze)
+            # print(f'time-taken: {datetime.now()-first}')
             # maze.draw_items(img_cropped_maze)
 
         elif corners is None:

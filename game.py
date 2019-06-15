@@ -3,6 +3,7 @@ from maze_solver import astar
 from load_images import load_player, load_slime, load_doggy, load_heart
 
 import numpy as np
+from math import log
 
 from time import perf_counter
 
@@ -39,22 +40,26 @@ class Master:
         self.ignored_entrances = []
         self.cheering_dogs = []
 
-    def step(self, img_cropped_maze):
-        # We calculate the smallest case there is and make the units a size that fits it
+    def get_min_dimension(self):
         min_dimension = np.inf
         for vline, nextvline in zip(self.maze.vlines, self.maze.vlines[1:]):
             min_dimension = min(min_dimension, nextvline.position - vline.position)
         for hline, nexthline in zip(self.maze.hlines, self.maze.hlines[1:]):
             min_dimension = min(min_dimension, nexthline.position - hline.position)
+        return min_dimension
+
+    def step(self, img_cropped_maze):
+        t = perf_counter()
+
+        # We calculate the smallest case there is and make the units a size that fits it
+        min_dimension = self.get_min_dimension()
 
         # Activate actions for each unit. Can change fps in __init__
         time = self.refresh_time()
 
         # Do actions for each unit
-        # print('frame')
         if time is True:
-            # print('step')
-            if self.player.action != 'cheering':
+            if self.player.action not in ['cheering', 'dead']:
                 self.player.step(min_dimension)
                 for npc in self.enemies + self.dogs:
                     npc.step(min_dimension)
@@ -62,16 +67,27 @@ class Master:
             for dog in self.cheering_dogs:
                 dog.step(min_dimension)
 
+        # print(f'passed {perf_counter()-t}')
+        t = perf_counter()
+
         # Draw each unit (player has priority so draw him last)
         for enemy in self.enemies:
             enemy.draw(img_cropped_maze, sprite_height=min_dimension)
         for dog in self.dogs + self.cheering_dogs:
-            dog.draw(img_cropped_maze, sprite_height=int(round(min_dimension*1.5)))
-        self.player.draw(img_cropped_maze, sprite_height=int(round(min_dimension*2)))
+            dog.draw(img_cropped_maze, sprite_height=int(round(min_dimension*1.25)))
+        self.player.draw(img_cropped_maze, sprite_height=int(round(min_dimension*1.8)))
+
+        # print(f'drawing {perf_counter()-t}')
+        t = perf_counter()
 
     def start(self):
         'Only do this one, time, when starting a new maze for the first time'
         # Create Player, Enemies, Items, set entrances
+
+        # Figure out size of the grid so we can calculate speed better
+        min_dimension = self.get_min_dimension()
+
+        self.speed_multiplier = 1 + log(min_dimension, 400)
 
         # Append to ignored_entrances so he doesn't walk out the way he came in
         entrance = self.maze.entrances[0]
@@ -84,11 +100,11 @@ class Master:
         self.enemies = []
         for item in self.maze.items:
             if item[1] == 'smol':
-                enemy = Enemy(item[0][0], item[0][1], sprite=self.slime_sprite, game=self)
+                enemy = Enemy(item[0][0], item[0][1], self.slime_sprite, self)
                 enemy.set_patrol()
                 self.enemies.append(enemy)
             else:
-                dog = Item(item[0][0], item[0][1], sprite=self.dog_sprite, game=self)
+                dog = Item(item[0][0], item[0][1], self.dog_sprite, self)
                 self.dogs.append(dog)
 
         self.playing = True
@@ -99,6 +115,9 @@ class Master:
         self.pause = False
         self.playing = False
         self.maze = None
+        self.units = []
+        self.ignored_entrances = []
+        self.cheering_dogs = []
         print('Stopped')
 
     def dump_maze(self, maze, h, w):
@@ -111,8 +130,10 @@ class Master:
         self.original_ygrid = maze.ygrid
 
     def refresh_time(self):
+        # print('frame')
         time_passed = perf_counter()-self.starttime
         if time_passed > self.timertick:
+            # print(f'step at {time_passed}')
             self.starttime = perf_counter()
             return True
         else:
@@ -297,7 +318,7 @@ class Player(Mover):
         self.show_hp_max_timer = 20
         self.show_hp_timer = 0
         # NOTE: Change this for speed
-        self.move_speed = 0.25
+        self.move_speed = 0.4 / self.game.speed_multiplier
         self.image_speed = self.move_speed*2
 
     def change_hp(self, *args, **kwargs):
@@ -372,9 +393,10 @@ class Player(Mover):
         # If we are at the exit (and we have rescued all rescuable dogs), its over
         if self.finished is True:
             if self.game.maze.case_array[self.array_y, self.array_x].entrance is True:
-                self.action = 'cheering'
-                self.path = None
-                self.moving_to = None
+                if (self.array_y, self.array_x) not in self.game.ignored_entrances:
+                    self.action = 'cheering'
+                    self.path = None
+                    self.moving_to = None
 
     def draw(self, image, sprite_height):
         sprite, first_frame, last_frame = self.get_sprite(self.direction)
@@ -461,7 +483,7 @@ class Enemy(Mover):
         self.hp = self.max_hp
         self.attack_power = 3.5
         # NOTE: Change this for speed
-        self.move_speed = 0.2
+        self.move_speed = 0.3 / self.game.speed_multiplier
         self.image_speed = self.move_speed*2
 
     def set_patrol(self):
@@ -479,6 +501,11 @@ class Enemy(Mover):
             self.patrol_path += path
         else:
             path, distance = self.make_path(case, self.spawn)
+            self.patrol_path += path
+        if len(patrol_cases) == 1:
+            path, distance = self.make_path(self.spawn, patrol_cases[0])
+            self.patrol_path += path
+            path, distance = self.make_path(patrol_cases[0], self.spawn)
             self.patrol_path += path
 
         self.set_path((self.patrol_path, 0))
@@ -516,14 +543,14 @@ class Enemy(Mover):
                 player.direction = 2 if xdelta > 0 else 0
 
         if self.action == 'fighting':
-            player.change_hp(-self.attack_power)
-            # print(f'{self} attacked player')
-
             if player.fighting[0] == self:
                 # If player is attacking ME, i get hit
                 # print(f'{self} being attacked by player')
                 self.change_hp(-player.attack_power)
 
+            if self.action != 'dead':
+                player.change_hp(-self.attack_power)
+                # print(f'{self} attacked player')
             if self.action == 'dead' or player.action == 'dead':
                 # print(player.hp)
                 player.remove_fight(self)
@@ -582,7 +609,7 @@ class Item(Mover):
         self.max_cheer_timer = 30
         self.cheer_timer = self.max_cheer_timer
         # NOTE: Change for doggy speed
-        self.move_speed = 0.4
+        self.move_speed = 0.5 / self.game.speed_multiplier
         self.image_speed = self.move_speed*2
 
     def class_step(self, min_dimension):
