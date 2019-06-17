@@ -32,15 +32,12 @@ class Master:
 
         self.built_mazes = dict()
 
-        self.starttime = 0
-        fps = 30
-        self.timertick = 1/fps
-
         self.units = []
         self.ignored_entrances = []
         self.cheering_dogs = []
 
     def get_min_dimension(self):
+        'Gets the minimum height/width of the smallest square in the grid, for resizing sprites'
         min_dimension = np.inf
         for vline, nextvline in zip(self.maze.vlines, self.maze.vlines[1:]):
             min_dimension = min(min_dimension, nextvline.position - vline.position)
@@ -54,18 +51,14 @@ class Master:
         # We calculate the smallest case there is and make the units a size that fits it
         min_dimension = self.get_min_dimension()
 
-        # Activate actions for each unit. Can change fps in __init__
-        time = self.refresh_time()
-
         # Do actions for each unit
-        if time is True:
-            if self.player.action not in ['cheering', 'dead']:
-                self.player.step(min_dimension)
-                for npc in self.enemies + self.dogs:
-                    npc.step(min_dimension)
-            # Dogs can still walk out even after the player finished the map
-            for dog in self.cheering_dogs:
-                dog.step(min_dimension)
+        if self.player.action not in ['cheering', 'dead']:
+            self.player.step(min_dimension)
+            for npc in self.enemies + self.dogs:
+                npc.step(min_dimension)
+        # Dogs can still walk out even after the player finished the map
+        for dog in self.cheering_dogs:
+            dog.step(min_dimension)
 
         # print(f'passed {perf_counter()-t}')
         t = perf_counter()
@@ -129,18 +122,8 @@ class Master:
         self.original_xgrid = maze.xgrid
         self.original_ygrid = maze.ygrid
 
-    def refresh_time(self):
-        # print('frame')
-        time_passed = perf_counter()-self.starttime
-        if time_passed > self.timertick:
-            # print(f'step at {time_passed}')
-            self.starttime = perf_counter()
-            return True
-        else:
-            return False
-
     def adjust_lines(self, h, w):
-        'Since lines change position when the maze is moved, we have to keep changing them'
+        'Since lines can change position when the maze is moved, we have to keep adjusting them'
         h_proportion = h/self.original_height
         w_proportion = w/self.original_width
 
@@ -161,6 +144,8 @@ class Unit:
         self.game = game
         self.maze = game.maze
         self.spawn = self.maze.case_array[y,x]
+        self.array_y = y
+        self.array_x = x
         # actions = ['walking', 'cheering', 'standing', 'fighting']
         self.action = 'walking'
         self.sprite = sprite
@@ -168,20 +153,9 @@ class Unit:
         self.last_frame = 3
         self.current_frame = 0
         # Animation speed (1 = one image per frame)
-        self.image_speed = 0.8
+        self.image_speed = 1
         # 0 = right, 1 = up, 2 = left, 3 = down
         self.direction = 3
-
-        self.array_y = y
-        self.array_x = x
-
-    def static_collision(self, units):
-        # collision when one of the objects is static
-        for unit in units:
-            if self.array_y == unit.array_y and self.array_x == unit.array_x:
-                return unit
-        else:
-            return None
 
     def real_position(self):
         first_y, first_x = self.maze.real_position(self.array_y, self.array_x)
@@ -281,6 +255,7 @@ class Mover(Unit):
                 self.array_y, self.array_x = y2, x2
                 self.relative_y, self.relative_x = 0, 0
                 self.moving_to = None
+                self.moving()
 
             elif y_distance == 0:
                 self.relative_x += self.move_speed/x_distance
@@ -296,6 +271,7 @@ class Mover(Unit):
                 self.array_y, self.array_x = y2, x2
                 self.relative_y, self.relative_x = 0, 0
                 self.moving_to = None
+                self.moving()
 
             if self.moving_to is None:
                 # If we just reached our destination look for the next one on the path
@@ -318,7 +294,7 @@ class Player(Mover):
         self.show_hp_max_timer = 20
         self.show_hp_timer = 0
         # NOTE: Change this for speed
-        self.move_speed = 0.4 / self.game.speed_multiplier
+        self.move_speed = 0.5 / self.game.speed_multiplier
         self.image_speed = self.move_speed*2
 
     def change_hp(self, *args, **kwargs):
@@ -326,28 +302,30 @@ class Player(Mover):
         self.show_hp_timer = self.show_hp_max_timer
 
     def action_dog_collision(self):
-        dog_collision = self.static_collision(self.game.dogs)
-        if dog_collision is not None:
-            self.change_hp(50)
-            # Put dog in barking mode and activate the timer until he runs out
-            dog_collision.action = 'cheering'
-            dog_collision.cheer_timer = dog_collision.max_cheer_timer
-            self.game.cheering_dogs.append(dog_collision)
-            self.game.dogs.remove(dog_collision)
-            # Make it so he faces the player
-            if self.direction == 0:
-                dog_collision.direction = 2
-            elif self.direction == 1:
-                dog_collision.direction = 3
-            elif self.direction == 2:
-                dog_collision.direction = 0
-            elif self.direction == 3:
-                dog_collision.direction = 1
+        if self.game.maze.case_array[self.array_y, self.array_x].value == 7:
+            for dog in self.game.dogs:
+                if dog.array_y == self.array_y and dog.array_x == self.array_x:
+                    self.change_hp(50)
+                    # Put dog in barking mode and activate the timer until he runs out
+                    dog.action = 'cheering'
+                    dog.cheer_timer = dog.max_cheer_timer
+                    self.game.cheering_dogs.append(dog)
+                    self.game.dogs.remove(dog)
+                    # Make it so he faces the player
+                    if self.direction == 0:
+                        dog.direction = 2
+                    elif self.direction == 1:
+                        dog.direction = 3
+                    elif self.direction == 2:
+                        dog.direction = 0
+                    elif self.direction == 3:
+                        dog.direction = 1
 
-            self.path = None
-            self.moving_to = None
+                    self.path = None
+                    self.moving_to = None
 
     def action_find_path(self):
+        '1: find all possible dogs, 2: leave the maze'
         # If our guy isn't doing anything, get him going
         if not self.path and self.action not in ['cheering', 'fighting']:
             shortest_path = ([], np.inf)
@@ -395,6 +373,7 @@ class Player(Mover):
             if self.game.maze.case_array[self.array_y, self.array_x].entrance is True:
                 if (self.array_y, self.array_x) not in self.game.ignored_entrances:
                     self.action = 'cheering'
+                    self.direction = 3
                     self.path = None
                     self.moving_to = None
 
@@ -483,7 +462,7 @@ class Enemy(Mover):
         self.hp = self.max_hp
         self.attack_power = 3.5
         # NOTE: Change this for speed
-        self.move_speed = 0.3 / self.game.speed_multiplier
+        self.move_speed = 0.5 / self.game.speed_multiplier
         self.image_speed = self.move_speed*2
 
     def set_patrol(self):
@@ -515,8 +494,15 @@ class Enemy(Mover):
         distance = self.real_distance(player)
         if not self.path:
             self.set_path((self.patrol_path, 0))
-        if distance <= min_dimension*2 and self.action == 'walking':
-            self.action = 'chasing'
+        if self.action == 'walking':
+            if distance <= min_dimension*5:
+                if player.moving_to is None:
+                    path, distance = self.make_path(self.game.maze.case_array[player.array_y, player.array_x], self.moving_to)
+                else:
+                    path, distance = self.make_path(player.moving_to, self.moving_to)
+                # NOTE edit this for minimum distance to chase the player
+                if distance < len(self.game.original_xgrid+self.game.original_ygrid)*1:
+                    self.action = 'chasing'
 
     def action_chasing(self):
         player = self.game.player
@@ -609,12 +595,14 @@ class Item(Mover):
         self.max_cheer_timer = 30
         self.cheer_timer = self.max_cheer_timer
         # NOTE: Change for doggy speed
-        self.move_speed = 0.5 / self.game.speed_multiplier
+        self.move_speed = 0.6 / self.game.speed_multiplier
         self.image_speed = self.move_speed*2
 
     def class_step(self, min_dimension):
-        if self.game.maze.case_array[self.array_y, self.array_x].entrance is True:
-            self.game.cheering_dogs.remove(self)
+        if self.action == 'walking':
+            if self.game.maze.case_array[self.array_y, self.array_x].entrance is True:
+                self.game.cheering_dogs.remove(self)
+
         if self.action == 'cheering':
             self.cheer_timer -= 1
             if self.cheer_timer <= 0:

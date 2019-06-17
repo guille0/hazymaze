@@ -14,11 +14,6 @@ class Maze:
         self.entrances = []
         self.maze_array = np.array([])
 
-    def looks_like_a_maze(self):
-        if self.vlines and self.hlines:
-            return True
-        return False
-
     def is_valid(self):
         # If it has less than 2 entrances, it's invalid
         if len(self.entrances) < 2:

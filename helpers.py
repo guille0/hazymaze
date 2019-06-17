@@ -72,6 +72,8 @@ def blend_non_transparent(sprite, background_img):
 def overlay_transparent(background, overlay, y, x):
     if y < 0:
         y = 0
+    if x < 0:
+        x = 0
 
     background_width = background.shape[1]
     background_height = background.shape[0]

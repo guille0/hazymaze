@@ -18,12 +18,13 @@ def maze_boi(img_original, key):
     img_test, corners = find_maze(img_original)
 
     # If we need to find a maze (when paused, we look for the maze we were on before)
+    # Grabbing maze image and creating maze
     if game.playing is False or game.pause is True:
         # If we got an object (maybe maze?)
         if corners is not None:
             # We crop out the maze and get the info needed to paste it back (matrix)
             img_cropped_maze, transformation = crop_from_points(img_original, corners)
-            cv2.imshow('asdasdasdasd', img_cropped_maze)
+            # cv2.imshow('asdasdasdasd', img_cropped_maze)
             # with img_cropped_maze get the red bits and extract them (mask)
             transformation_matrix = transformation['matrix']
             original_shape = transformation['original_shape']
@@ -39,33 +40,38 @@ def maze_boi(img_original, key):
                 maze = Maze(vlines, hlines)
                 maze.get_walkable_grid()
 
-                if maze.looks_like_a_maze() is True:
-                    # Visuals
-                    # maze.draw_grid(img_cropped_maze)
-                    # maze.draw_lines(img_cropped_maze)
-                    maze.draw_maze(img_cropped_maze)
+                # Visuals
+                # maze.draw_grid(img_cropped_maze)
+                # maze.draw_lines(img_cropped_maze)
+                maze.draw_maze(img_cropped_maze)
 
-                    # Turn the maze into an array we can work with
-                    maze.build_maze(items, key=key)
-                    # img_cropped_maze[item_mask > 0] = (180, 255, 0)
-                    maze.draw_items(img_cropped_maze)
+                # Turn the maze into an array we can work with
+                maze.build_maze(items, key=key)
+                # img_cropped_maze[item_mask > 0] = (180, 255, 0)
+                maze.draw_items(img_cropped_maze)
 
-                    if maze.is_valid() is True:
+                if maze.is_valid() is not True:
+                    return img_original
+                else:
 
-                        if game.pause is True:
-                            # When it finds it, it just returns to it
-                            if np.array2string(maze.maze_array) == np.array2string(game.maze.maze_array):
-                                game.pause = False
+                    if game.pause is True:
+                        # When it finds it, it just returns to it
+                        if np.array2string(maze.maze_array) == np.array2string(game.maze.maze_array):
+                            game.pause = False
 
-                        if game.playing is False:
-                            game.ready = True
-                            h, w = img_cropped_maze.shape[0], img_cropped_maze.shape[1]
-                            # Ready to play, listen to key press
-                            if key == game.key:
-                                game.dump_maze(maze, h, w)
-                                game.start()
-                                key = -1    # So we don't trigger another keypress
+                    if game.playing is False:
+                        game.ready = True
+                        h, w = img_cropped_maze.shape[0], img_cropped_maze.shape[1]
+                        # Ready to play, listen to key press
+                        if key == game.key:
+                            game.dump_maze(maze, h, w)
+                            game.start()
+                            key = -1    # So we don't trigger another keypress
 
+            else:
+                return img_original
+
+    # Playing the game
     if game.playing is True and game.pause is False:
         if corners is not None:
             img_cropped_maze, transformation = crop_from_points(img_original, corners)
@@ -92,6 +98,7 @@ def maze_boi(img_original, key):
             game.stop()
             key = -1    # So we don't trigger another keypress
 
+    # Pasting cropped maze into full image
     if corners is not None:
         # We paste the cropped maze which is now solved into the camera image
         # TODO HIDE?: Test texts:
@@ -102,7 +109,7 @@ def maze_boi(img_original, key):
         # if game.ready is True:
         #     write_text(img_original, 'Press space to begin!')
         #     game.ready = False
-
+        # cv2.imshow('cropped', img_cropped_maze)
         img_maze_final = perspective_transform(img_cropped_maze, transformation_matrix,
                                                original_shape, img_original.shape)
         img_final = blend_non_transparent(img_original, img_maze_final)

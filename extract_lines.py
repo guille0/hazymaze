@@ -12,7 +12,7 @@ def find_maze(img):
     edges = cv2.GaussianBlur(edges, (11, 11), 0)
     edges = cv2.adaptiveThreshold(edges, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY_INV, 19, 2)
 
-    cv2.imshow('adad', edges)
+    # cv2.imshow('adad', edges)
 
     # Get contours:
     contours, _ = cv2.findContours(edges, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
@@ -59,13 +59,12 @@ def find_items(maze_image):
     dim = (h+w)//2
     b_and_w = cv2.cvtColor(maze_image, cv2.COLOR_BGR2GRAY)
     edges = cv2.GaussianBlur(b_and_w, (11, 11), 0)
-    edges = cv2.adaptiveThreshold(edges, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 11, 2)
+    edges = cv2.adaptiveThreshold(edges, 255, cv2.ADAPTIVE_THRESH_GAUSSIAN_C, cv2.THRESH_BINARY, 9, 2)
 
     cv2.rectangle(edges,(0, 0),(w-1,h-1),(255,255,255),16)
     contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
     # cv2.imshow('d', edges)
-    # cv2.imshow('items', maze_image)
 
     items = []
 
