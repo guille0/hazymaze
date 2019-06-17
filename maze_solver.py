@@ -18,8 +18,8 @@ def astar(maze_object, start, destination):
                 if nextcase.distance > path_distance+case.distance:
                     nextcase.distance = path_distance+case.distance
                     nextcase.back = case
-                    q.put((path_distance, nextcase))
-                    # q.put((distance_to(nextcase, destination)+path_distance, nextcase))
+                    # q.put((path_distance, nextcase))
+                    q.put((distance_to(nextcase, destination)+path_distance, nextcase))
 
     node = destination
     distance = destination.distance
@@ -34,8 +34,8 @@ def astar(maze_object, start, destination):
     return list(reversed(path)), distance
 
 
-# def distance_to(one, other):
-#     return abs(one.position[1]-other.position[1])+abs(one.position[0]-other.position[0])
+def distance_to(one, other):
+    return abs(one.position[1]-other.position[1])+abs(one.position[0]-other.position[0])
 
 
 # TESTING WITH PICKLED MAZE
