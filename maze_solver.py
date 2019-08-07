@@ -3,7 +3,7 @@ from queue import PriorityQueue
 import pickle
 
 
-def astar(maze_object, start, destination):
+def astar(maze_object, start, destination, clear=True):
     # Quote for test
     q = PriorityQueue()
     start.distance = 0
@@ -30,7 +30,8 @@ def astar(maze_object, start, destination):
     path.append(node)
 
     # Resets all variables used in astar (Quote for test)
-    maze_object.clear()
+    if clear is True:
+        maze_object.clear()
     return list(reversed(path)), distance
 
 
